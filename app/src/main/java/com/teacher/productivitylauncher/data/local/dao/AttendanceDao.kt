@@ -33,4 +33,8 @@ interface AttendanceDao {
 
     @Query("DELETE FROM attendance WHERE date = :date")
     suspend fun deleteAttendanceByDate(date: Date)
+
+    // Get all attendance records (for backup)
+    @Query("SELECT * FROM attendance")
+    fun getAllAttendance(): Flow<List<Attendance>>
 }

@@ -151,7 +151,8 @@ fun LauncherScreen() {
                 onMessageClick = { showMessage = true },
                 onWhatsAppClick = { showWhatsApp = true },
                 onNotesClick = { showNotes = true },
-                onExamsClick = { showExams = true }
+                onExamsClick = { showExams = true },
+                onClassRoutineClick = { showClassRoutine = true }
             )
             1 -> LeftPanelScreen(
                 onBack = { currentPage = 0 },
@@ -217,7 +218,8 @@ fun MinimalHomeScreen(
     onMessageClick: () -> Unit,
     onWhatsAppClick: () -> Unit,
     onNotesClick: () -> Unit,
-    onExamsClick: () -> Unit
+    onExamsClick: () -> Unit,
+    onClassRoutineClick: () -> Unit
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -274,7 +276,7 @@ fun MinimalHomeScreen(
 
             Text(
                 text = timeFormat.format(currentTime),
-                fontSize = 56.sp,
+                fontSize = 64.sp,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary,
                 letterSpacing = 4.sp
@@ -284,7 +286,7 @@ fun MinimalHomeScreen(
 
             Text(
                 text = dateFormat.format(currentTime),
-                fontSize = 16.sp,
+                fontSize = 18.sp,
                 color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
                 letterSpacing = 1.sp
             )
@@ -292,7 +294,9 @@ fun MinimalHomeScreen(
             Spacer(modifier = Modifier.height(32.dp))
 
             Card(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onClassRoutineClick() },
                 shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surfaceVariant
@@ -395,6 +399,16 @@ fun MinimalHomeScreen(
             Spacer(modifier = Modifier.weight(1f))
 
             if (favoriteAppInfos.isNotEmpty()) {
+                Text(
+                    text = "⭐ Favorite Apps",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Start
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()

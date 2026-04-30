@@ -3,8 +3,9 @@ package com.teacher.productivitylauncher.presentation.settings
 import android.content.Intent
 import android.provider.Settings
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -19,6 +20,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.teacher.productivitylauncher.data.local.BackupManager
+import com.teacher.productivitylauncher.presentation.theme.ThemeViewModel
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -26,11 +30,34 @@ import kotlinx.coroutines.launch
 fun SettingsScreen(onClose: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val themeViewModel: ThemeViewModel = viewModel()
+    val backupManager = remember { BackupManager(context) }
 
-    // Fix: Move isSystemInDarkTheme() outside remember
-    val isDarkTheme = isSystemInDarkTheme()
-    var isDarkMode by remember { mutableStateOf(isDarkTheme) }
-    var notificationsEnabled by remember { mutableStateOf(true) }
+    val isDarkMode by themeViewModel.isDarkMode.collectAsState()
+    val areNotificationsEnabled by themeViewModel.areNotificationsEnabled.collectAsState()
+    var isBackingUp by remember { mutableStateOf(false) }
+    var isRestoring by remember { mutableStateOf(false) }
+
+    // File picker launcher for restore
+    val restoreLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == android.app.Activity.RESULT_OK) {
+            val uri = result.data?.data
+            uri?.let {
+                scope.launch {
+                    isRestoring = true
+                    val success = backupManager.importDatabase(it)
+                    if (success) {
+                        Toast.makeText(context, "Restore completed successfully!", Toast.LENGTH_LONG).show()
+                    } else {
+                        Toast.makeText(context, "Restore failed. Check file format.", Toast.LENGTH_LONG).show()
+                    }
+                    isRestoring = false
+                }
+            }
+        }
+    }
 
     val settingsItems = listOf(
         SettingsItem(
@@ -45,7 +72,7 @@ fun SettingsScreen(onClose: () -> Unit) {
             title = "Class Reminders",
             icon = Icons.Default.Notifications,
             type = SettingsItemType.SWITCH,
-            value = notificationsEnabled
+            value = areNotificationsEnabled
         ),
         SettingsItem(
             id = "backup",
@@ -53,7 +80,17 @@ fun SettingsScreen(onClose: () -> Unit) {
             icon = Icons.Default.Backup,
             type = SettingsItemType.BUTTON,
             onClick = {
-                Toast.makeText(context, "Backup feature coming soon", Toast.LENGTH_SHORT).show()
+                scope.launch {
+                    isBackingUp = true
+                    val backupFile = backupManager.exportDatabase()
+                    if (backupFile != null) {
+                        backupManager.shareBackupFile(backupFile)
+                        Toast.makeText(context, "Backup created successfully!", Toast.LENGTH_SHORT).show()
+                    } else {
+                        Toast.makeText(context, "Backup failed. Please try again.", Toast.LENGTH_SHORT).show()
+                    }
+                    isBackingUp = false
+                }
             }
         ),
         SettingsItem(
@@ -62,7 +99,8 @@ fun SettingsScreen(onClose: () -> Unit) {
             icon = Icons.Default.Restore,
             type = SettingsItemType.BUTTON,
             onClick = {
-                Toast.makeText(context, "Restore feature coming soon", Toast.LENGTH_SHORT).show()
+                val intent = backupManager.pickBackupFile()
+                restoreLauncher.launch(intent)
             }
         ),
         SettingsItem(
@@ -80,7 +118,7 @@ fun SettingsScreen(onClose: () -> Unit) {
             icon = Icons.Default.Info,
             type = SettingsItemType.NAVIGATION,
             onClick = {
-                Toast.makeText(context, "Version 1.0.0", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "Teacher Productivity Launcher\nVersion 1.0.0\n\nA minimalist launcher for teachers", Toast.LENGTH_LONG).show()
             }
         )
     )
@@ -94,7 +132,6 @@ fun SettingsScreen(onClose: () -> Unit) {
                 .fillMaxWidth()
                 .padding(16.dp)
         ) {
-            // Header
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -113,6 +150,21 @@ fun SettingsScreen(onClose: () -> Unit) {
 
             Spacer(modifier = Modifier.height(16.dp))
 
+            // Loading indicators
+            if (isBackingUp) {
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                Spacer(modifier = Modifier.height(8.dp))
+                Text("Creating backup...", fontSize = 12.sp)
+            }
+
+            if (isRestoring) {
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                Spacer(modifier = Modifier.height(8.dp))
+                Text("Restoring data...", fontSize = 12.sp)
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
             LazyColumn(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
@@ -123,8 +175,8 @@ fun SettingsScreen(onClose: () -> Unit) {
                                 item = item,
                                 onCheckedChange = { checked ->
                                     when (item.id) {
-                                        "dark_mode" -> isDarkMode = checked
-                                        "notifications" -> notificationsEnabled = checked
+                                        "dark_mode" -> themeViewModel.setDarkMode(checked)
+                                        "notifications" -> themeViewModel.setNotificationsEnabled(checked)
                                     }
                                 }
                             )
@@ -138,7 +190,6 @@ fun SettingsScreen(onClose: () -> Unit) {
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // App Version
             Text(
                 text = "Version 1.0.0",
                 fontSize = 12.sp,

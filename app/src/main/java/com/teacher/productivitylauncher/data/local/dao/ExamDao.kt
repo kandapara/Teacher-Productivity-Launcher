@@ -21,4 +21,8 @@ interface ExamDao {
 
     @Delete
     suspend fun deleteExam(exam: Exam)
+
+    // Get all exams (for backup)
+    @Query("SELECT * FROM exams")
+    fun getAllExamsForBackup(): Flow<List<Exam>>
 }

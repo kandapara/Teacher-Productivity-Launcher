@@ -68,6 +68,11 @@ fun AppsDrawerScreen(
     var selectedApp by remember { mutableStateOf<AppInfo?>(null) }
     var showMenu by remember { mutableStateOf(false) }
 
+    // Rename dialog states
+    var showRenameDialog by remember { mutableStateOf(false) }
+    var renameApp by remember { mutableStateOf<AppInfo?>(null) }
+    var newAppName by remember { mutableStateOf("") }
+
     ModalBottomSheet(
         onDismissRequest = onClose,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
@@ -158,6 +163,53 @@ fun AppsDrawerScreen(
         }
     }
 
+    // Rename Dialog
+    if (showRenameDialog && renameApp != null) {
+        AlertDialog(
+            onDismissRequest = {
+                showRenameDialog = false
+                renameApp = null
+                newAppName = ""
+            },
+            title = { Text("Rename ${renameApp!!.name}") },
+            text = {
+                OutlinedTextField(
+                    value = newAppName,
+                    onValueChange = { newAppName = it },
+                    label = { Text("New name") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        if (newAppName.isNotBlank()) {
+                            scope.launch {
+                                viewModel.renameApp(renameApp!!.packageName, newAppName, renameApp!!.name)
+                                Toast.makeText(context, "App renamed to $newAppName", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                        showRenameDialog = false
+                        renameApp = null
+                        newAppName = ""
+                    }
+                ) {
+                    Text("Save")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showRenameDialog = false
+                    renameApp = null
+                    newAppName = ""
+                }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
     if (showMenu && selectedApp != null) {
         val app = selectedApp!!
 
@@ -197,7 +249,9 @@ fun AppsDrawerScreen(
                         showMenu = false
                     }
                     MenuItem(icon = Icons.Default.Edit, text = "Rename") {
-                        Toast.makeText(context, "Coming soon: Rename app", Toast.LENGTH_SHORT).show()
+                        renameApp = app
+                        newAppName = app.name
+                        showRenameDialog = true
                         showMenu = false
                     }
                     MenuItem(icon = Icons.Default.VisibilityOff, text = "Hide") {

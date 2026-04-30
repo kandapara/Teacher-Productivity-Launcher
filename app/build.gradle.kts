@@ -76,6 +76,9 @@ dependencies {
     implementation("androidx.work:work-runtime-ktx:2.9.0")
     implementation("com.google.accompanist:accompanist-permissions:0.32.0")
 
+    // Lifecycle Runtime Compose for collectAsStateWithLifecycle
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.7.0")
+
     // PDF to Image / Image to PDF - REMOVED (not working)
     // implementation("com.github.barteksc:android-pdf-viewer:2.8.2")
     // implementation("com.itextpdf:itext7-core:7.2.5")
@@ -89,6 +92,9 @@ dependencies {
     implementation("androidx.camera:camera-camera2:1.3.0")
     implementation("androidx.camera:camera-lifecycle:1.3.0")
     implementation("androidx.camera:camera-view:1.3.0")
+
+// Image Processing
+    implementation("com.github.bumptech.glide:glide:4.16.0")
 
     // File Picker - REMOVED (not working, using default gallery picker instead)
     // implementation("com.github.dhaval2404:imagepicker:2.1")

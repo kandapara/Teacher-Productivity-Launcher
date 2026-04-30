@@ -4,7 +4,7 @@ import android.Manifest
 import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
-import android.provider.MediaStore
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
@@ -27,85 +27,135 @@ import com.google.accompanist.permissions.*
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
+import com.teacher.productivitylauncher.presentation.utils.PdfUtils
+import kotlinx.coroutines.launch
 
-data class SimpleToolItem(
+data class ToolItem(
     val id: String,
     val name: String,
     val icon: androidx.compose.ui.graphics.vector.ImageVector,
     val description: String
 )
 
+// Share file function - defined at top level
+fun shareFile(context: android.content.Context, file: java.io.File) {
+    try {
+        val uri = androidx.core.content.FileProvider.getUriForFile(
+            context,
+            "${context.packageName}.fileprovider",
+            file
+        )
+        val shareIntent = Intent(Intent.ACTION_SEND).apply {
+            type = "image/jpeg"
+            putExtra(Intent.EXTRA_STREAM, uri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        context.startActivity(Intent.createChooser(shareIntent, "Share Image"))
+    } catch (e: Exception) {
+        Toast.makeText(context, "Error sharing file: ${e.message}", Toast.LENGTH_SHORT).show()
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalPermissionsApi::class)
 @Composable
 fun TeachingToolsScreen(onClose: () -> Unit) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val pdfUtils = remember { PdfUtils(context) }
+
     var showCalculator by remember { mutableStateOf(false) }
     var extractedText by remember { mutableStateOf<String?>(null) }
     var showProgress by remember { mutableStateOf(false) }
+    var progressMessage by remember { mutableStateOf("") }
+    var progressCurrent by remember { mutableStateOf(0) }
+    var progressTotal by remember { mutableStateOf(0) }
 
     // Camera permission
     val cameraPermissionState = rememberPermissionState(Manifest.permission.CAMERA)
 
-    // Text recognizer
+    // Text recognizer for OCR
     val recognizer = remember { TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS) }
 
-    // Camera launcher for OCR
-    val cameraLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.TakePicturePreview(),
-        onResult = { bitmap ->
-            bitmap?.let {
-                showProgress = true
-                val image = InputImage.fromBitmap(it, 0)
-                recognizer.process(image)
-                    .addOnSuccessListener { visionText ->
-                        extractedText = visionText.text
-                        showProgress = false
-                    }
-                    .addOnFailureListener { e ->
-                        extractedText = "Failed to extract text: ${e.message}"
-                        showProgress = false
-                    }
-            }
-        }
-    )
-
-    // Document scanner (gallery picker)
-    val galleryLauncher = rememberLauncherForActivityResult(
+    // PDF Picker Launcher
+    val pdfPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent(),
         onResult = { uri ->
             uri?.let {
-                showProgress = true
-                val inputStream = context.contentResolver.openInputStream(it)
-                val bitmap = android.graphics.BitmapFactory.decodeStream(inputStream)
-                bitmap?.let { bmp ->
-                    val image = InputImage.fromBitmap(bmp, 0)
-                    recognizer.process(image)
-                        .addOnSuccessListener { visionText ->
-                            extractedText = visionText.text
-                            showProgress = false
-                        }
-                        .addOnFailureListener { e ->
-                            extractedText = "Failed to extract text: ${e.message}"
-                            showProgress = false
-                        }
+                scope.launch {
+                    showProgress = true
+                    progressMessage = "Converting PDF to images..."
+                    val images = pdfUtils.convertPdfToImages(it) { current, total ->
+                        progressCurrent = current
+                        progressTotal = total
+                        progressMessage = "Converting page $current of $total..."
+                    }
+                    showProgress = false
+
+                    if (images.isNotEmpty()) {
+                        Toast.makeText(context, "PDF converted to ${images.size} images", Toast.LENGTH_LONG).show()
+                        shareFile(context, images.first())
+                    } else {
+                        Toast.makeText(context, "Failed to convert PDF", Toast.LENGTH_SHORT).show()
+                    }
                 }
             }
         }
     )
 
-    fun shareText(text: String) {
-        val shareIntent = Intent(Intent.ACTION_SEND).apply {
-            type = "text/plain"
-            putExtra(Intent.EXTRA_TEXT, text)
+    // Camera Launcher for OCR
+    val cameraLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicturePreview(),
+        onResult = { bitmap ->
+            bitmap?.let {
+                val image = InputImage.fromBitmap(it, 0)
+                recognizer.process(image)
+                    .addOnSuccessListener { visionText ->
+                        extractedText = visionText.text
+                    }
+                    .addOnFailureListener { e ->
+                        extractedText = "Failed to extract text: ${e.message}"
+                    }
+            }
         }
-        context.startActivity(Intent.createChooser(shareIntent, "Share Text"))
-    }
+    )
+
+    // Gallery Launcher for OCR
+    val galleryLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent(),
+        onResult = { uri ->
+            uri?.let {
+                scope.launch {
+                    showProgress = true
+                    progressMessage = "Extracting text from image..."
+                    val inputStream = context.contentResolver.openInputStream(it)
+                    val bitmap = android.graphics.BitmapFactory.decodeStream(inputStream)
+                    inputStream?.close()
+
+                    bitmap?.let { bmp ->
+                        val image = InputImage.fromBitmap(bmp, 0)
+                        recognizer.process(image)
+                            .addOnSuccessListener { visionText ->
+                                extractedText = visionText.text
+                                showProgress = false
+                            }
+                            .addOnFailureListener { e ->
+                                extractedText = "Failed to extract text: ${e.message}"
+                                showProgress = false
+                            }
+                    } ?: run {
+                        showProgress = false
+                        Toast.makeText(context, "Failed to load image", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+        }
+    )
 
     val tools = listOf(
-        SimpleToolItem("ocr_camera", "OCR Camera", Icons.Default.CameraAlt, "Extract text from camera"),
-        SimpleToolItem("ocr_gallery", "OCR Gallery", Icons.Default.Image, "Extract text from images"),
-        SimpleToolItem("calculator", "Calculator", Icons.Default.Calculate, "Basic calculator"),
-        SimpleToolItem("scanner", "Document Scanner", Icons.Default.QrCodeScanner, "Scan documents")
+        ToolItem("pdf_to_jpg", "PDF to JPG", Icons.Default.PictureAsPdf, "Convert PDF pages to images"),
+        ToolItem("ocr_camera", "OCR Camera", Icons.Default.CameraAlt, "Extract text from camera"),
+        ToolItem("ocr_gallery", "OCR Gallery", Icons.Default.Image, "Extract text from images"),
+        ToolItem("calculator", "Calculator", Icons.Default.Calculate, "Basic calculator")
     )
 
     if (showCalculator) {
@@ -145,14 +195,16 @@ fun TeachingToolsScreen(onClose: () -> Unit) {
                             containerColor = MaterialTheme.colorScheme.primaryContainer
                         )
                     ) {
-                        Row(
+                        Column(
                             modifier = Modifier.padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center
+                            horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            CircularProgressIndicator(modifier = Modifier.size(24.dp))
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Processing...")
+                            LinearProgressIndicator(
+                                modifier = Modifier.fillMaxWidth(),
+                                progress = if (progressTotal > 0) progressCurrent.toFloat() / progressTotal.toFloat() else 0f
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(progressMessage, fontSize = 12.sp)
                         }
                     }
                     Spacer(modifier = Modifier.height(16.dp))
@@ -173,7 +225,13 @@ fun TeachingToolsScreen(onClose: () -> Unit) {
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Text("📄 Extracted Text:", fontWeight = FontWeight.Bold)
-                                IconButton(onClick = { shareText(text) }) {
+                                IconButton(onClick = {
+                                    val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                        type = "text/plain"
+                                        putExtra(Intent.EXTRA_TEXT, text)
+                                    }
+                                    context.startActivity(Intent.createChooser(shareIntent, "Share Text"))
+                                }) {
                                     Icon(Icons.Default.Share, contentDescription = "Share", modifier = Modifier.size(20.dp))
                                 }
                             }
@@ -193,13 +251,16 @@ fun TeachingToolsScreen(onClose: () -> Unit) {
                     columns = GridCells.Fixed(2),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
-                    modifier = Modifier.heightIn(max = 400.dp)
+                    modifier = Modifier.heightIn(max = 500.dp)
                 ) {
                     items(tools) { tool ->
-                        SimpleToolCard(
+                        ToolCard(
                             tool = tool,
                             onClick = {
                                 when (tool.id) {
+                                    "pdf_to_jpg" -> {
+                                        pdfPickerLauncher.launch("application/pdf")
+                                    }
                                     "ocr_camera" -> {
                                         if (cameraPermissionState.status.isGranted) {
                                             cameraLauncher.launch(null)
@@ -213,9 +274,6 @@ fun TeachingToolsScreen(onClose: () -> Unit) {
                                     "calculator" -> {
                                         showCalculator = true
                                     }
-                                    "scanner" -> {
-                                        galleryLauncher.launch("image/*")
-                                    }
                                 }
                             }
                         )
@@ -227,7 +285,7 @@ fun TeachingToolsScreen(onClose: () -> Unit) {
 }
 
 @Composable
-fun SimpleToolCard(tool: SimpleToolItem, onClick: () -> Unit) {
+fun ToolCard(tool: ToolItem, onClick: () -> Unit) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -355,7 +413,7 @@ fun CalculatorScreen(onBack: () -> Unit) {
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         row.forEach { button ->
-                            CalculatorSimpleButton(
+                            CalculatorButton(
                                 text = button,
                                 onClick = {
                                     when (button) {
@@ -389,7 +447,7 @@ fun CalculatorScreen(onBack: () -> Unit) {
 }
 
 @Composable
-fun CalculatorSimpleButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+fun CalculatorButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val isOperator = text in listOf("+", "-", "*", "/", "=")
     val isClear = text in listOf("C", "⌫")
 

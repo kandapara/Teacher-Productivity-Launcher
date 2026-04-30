@@ -1,5 +1,10 @@
 package com.teacher.productivitylauncher.presentation.classroutine
 
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Card
+import androidx.compose.foundation.layout.PaddingValues
 import android.app.Application
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -303,40 +308,78 @@ fun RoutineDialog(
     var dayExpanded by remember { mutableStateOf(false) }
     var startTimeExpanded by remember { mutableStateOf(false) }
     var endTimeExpanded by remember { mutableStateOf(false) }
+    var useManualStartTime by remember { mutableStateOf(false) }
+    var useManualEndTime by remember { mutableStateOf(false) }
 
+    val days = listOf("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
+
+    // Time slots from 5:00 AM to 11:00 PM
     val timeSlots = listOf(
-        "08:00 AM", "08:30 AM", "09:00 AM", "09:30 AM", "10:00 AM", "10:30 AM",
-        "11:00 AM", "11:30 AM", "12:00 PM", "12:30 PM", "01:00 PM", "01:30 PM",
-        "02:00 PM", "02:30 PM", "03:00 PM", "03:30 PM", "04:00 PM", "04:30 PM",
-        "05:00 PM"
+        "05:00 AM", "05:30 AM", "06:00 AM", "06:30 AM",
+        "07:00 AM", "07:30 AM", "08:00 AM", "08:30 AM",
+        "09:00 AM", "09:30 AM", "10:00 AM", "10:30 AM",
+        "11:00 AM", "11:30 AM", "12:00 PM", "12:30 PM",
+        "01:00 PM", "01:30 PM", "02:00 PM", "02:30 PM",
+        "03:00 PM", "03:30 PM", "04:00 PM", "04:30 PM",
+        "05:00 PM", "05:30 PM", "06:00 PM", "06:30 PM",
+        "07:00 PM", "07:30 PM", "08:00 PM", "08:30 PM",
+        "09:00 PM", "09:30 PM", "10:00 PM", "10:30 PM",
+        "11:00 PM"
     )
+
+    // Helper function to format time for manual input
+    fun formatManualTime(input: String): String {
+        var clean = input.trim().uppercase()
+            .replace("AM", "")
+            .replace("PM", "")
+            .replace(" ", "")
+
+        val timePattern = Regex("^([0-1]?[0-9]|2[0-3]):([0-5][0-9])$")
+        if (timePattern.matches(clean)) {
+            val parts = clean.split(":")
+            val hour = parts[0].toInt()
+            val minute = parts[1]
+
+            return if (hour < 12) {
+                "${if (hour == 0) 12 else hour}:$minute AM"
+            } else {
+                "${if (hour == 12) 12 else hour - 12}:$minute PM"
+            }
+        }
+        return input
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(if (routine == null) "Add Class" else "Edit Class") },
         text = {
-            Column {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 500.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
                 OutlinedTextField(
                     value = subjectName,
                     onValueChange = { subjectName = it },
                     label = { Text("Subject Name") },
                     modifier = Modifier.fillMaxWidth()
                 )
-                Spacer(modifier = Modifier.height(8.dp))
+
                 OutlinedTextField(
                     value = className,
                     onValueChange = { className = it },
                     label = { Text("Class (e.g., Class 8)") },
                     modifier = Modifier.fillMaxWidth()
                 )
-                Spacer(modifier = Modifier.height(8.dp))
+
                 OutlinedTextField(
                     value = teacherName,
                     onValueChange = { teacherName = it },
                     label = { Text("Teacher Name") },
                     modifier = Modifier.fillMaxWidth()
                 )
-                Spacer(modifier = Modifier.height(8.dp))
 
                 // Day selection
                 ExposedDropdownMenuBox(
@@ -369,73 +412,187 @@ fun RoutineDialog(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // Start Time
-                ExposedDropdownMenuBox(
-                    expanded = startTimeExpanded,
-                    onExpandedChange = { startTimeExpanded = it }
-                ) {
-                    OutlinedTextField(
-                        value = startTime,
-                        onValueChange = {},
-                        readOnly = true,
-                        label = { Text("Start Time") },
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = startTimeExpanded) },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .menuAnchor()
+                // Start Time with Manual Input Option
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant
                     )
-                    DropdownMenu(
-                        expanded = startTimeExpanded,
-                        onDismissRequest = { startTimeExpanded = false }
+                ) {
+                    Column(
+                        modifier = Modifier.padding(8.dp)
                     ) {
-                        timeSlots.forEach { time ->
-                            DropdownMenuItem(
-                                text = { Text(time) },
-                                onClick = {
-                                    startTime = time
-                                    startTimeExpanded = false
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("Start Time", fontWeight = FontWeight.Medium)
+                            Row {
+                                TextButton(
+                                    onClick = { useManualStartTime = false },
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                                ) {
+                                    Text(
+                                        "Select",
+                                        fontSize = 11.sp,
+                                        color = if (!useManualStartTime) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                                    )
                                 }
+                                TextButton(
+                                    onClick = { useManualStartTime = true },
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                                ) {
+                                    Text(
+                                        "Manual",
+                                        fontSize = 11.sp,
+                                        color = if (useManualStartTime) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                                    )
+                                }
+                            }
+                        }
+
+                        if (useManualStartTime) {
+                            OutlinedTextField(
+                                value = startTime,
+                                onValueChange = { newValue ->
+                                    startTime = newValue
+                                },
+                                placeholder = { Text("e.g., 09:45 AM, 10:15 AM, 2:30 PM") },
+                                label = { Text("Enter Time") },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true
                             )
+                            Text(
+                                "Format: HH:MM AM/PM (e.g., 09:45 AM, 2:30 PM)",
+                                fontSize = 10.sp,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                            )
+                        } else {
+                            ExposedDropdownMenuBox(
+                                expanded = startTimeExpanded,
+                                onExpandedChange = { startTimeExpanded = it }
+                            ) {
+                                OutlinedTextField(
+                                    value = startTime,
+                                    onValueChange = {},
+                                    readOnly = true,
+                                    label = { Text("Select Start Time") },
+                                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = startTimeExpanded) },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .menuAnchor()
+                                )
+                                DropdownMenu(
+                                    expanded = startTimeExpanded,
+                                    onDismissRequest = { startTimeExpanded = false },
+                                    modifier = Modifier.heightIn(max = 250.dp)
+                                ) {
+                                    timeSlots.forEach { time ->
+                                        DropdownMenuItem(
+                                            text = { Text(time) },
+                                            onClick = {
+                                                startTime = time
+                                                startTimeExpanded = false
+                                            }
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // End Time
-                ExposedDropdownMenuBox(
-                    expanded = endTimeExpanded,
-                    onExpandedChange = { endTimeExpanded = it }
-                ) {
-                    OutlinedTextField(
-                        value = endTime,
-                        onValueChange = {},
-                        readOnly = true,
-                        label = { Text("End Time") },
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = endTimeExpanded) },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .menuAnchor()
+                // End Time with Manual Input Option
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant
                     )
-                    DropdownMenu(
-                        expanded = endTimeExpanded,
-                        onDismissRequest = { endTimeExpanded = false }
+                ) {
+                    Column(
+                        modifier = Modifier.padding(8.dp)
                     ) {
-                        timeSlots.forEach { time ->
-                            DropdownMenuItem(
-                                text = { Text(time) },
-                                onClick = {
-                                    endTime = time
-                                    endTimeExpanded = false
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("End Time", fontWeight = FontWeight.Medium)
+                            Row {
+                                TextButton(
+                                    onClick = { useManualEndTime = false },
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                                ) {
+                                    Text(
+                                        "Select",
+                                        fontSize = 11.sp,
+                                        color = if (!useManualEndTime) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                                    )
                                 }
+                                TextButton(
+                                    onClick = { useManualEndTime = true },
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                                ) {
+                                    Text(
+                                        "Manual",
+                                        fontSize = 11.sp,
+                                        color = if (useManualEndTime) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                                    )
+                                }
+                            }
+                        }
+
+                        if (useManualEndTime) {
+                            OutlinedTextField(
+                                value = endTime,
+                                onValueChange = { newValue ->
+                                    endTime = newValue
+                                },
+                                placeholder = { Text("e.g., 10:30 AM, 01:45 PM") },
+                                label = { Text("Enter Time") },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true
                             )
+                            Text(
+                                "Format: HH:MM AM/PM (e.g., 10:30 AM, 1:45 PM)",
+                                fontSize = 10.sp,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                            )
+                        } else {
+                            ExposedDropdownMenuBox(
+                                expanded = endTimeExpanded,
+                                onExpandedChange = { endTimeExpanded = it }
+                            ) {
+                                OutlinedTextField(
+                                    value = endTime,
+                                    onValueChange = {},
+                                    readOnly = true,
+                                    label = { Text("Select End Time") },
+                                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = endTimeExpanded) },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .menuAnchor()
+                                )
+                                DropdownMenu(
+                                    expanded = endTimeExpanded,
+                                    onDismissRequest = { endTimeExpanded = false },
+                                    modifier = Modifier.heightIn(max = 250.dp)
+                                ) {
+                                    timeSlots.forEach { time ->
+                                        DropdownMenuItem(
+                                            text = { Text(time) },
+                                            onClick = {
+                                                endTime = time
+                                                endTimeExpanded = false
+                                            }
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                 }
-
-                Spacer(modifier = Modifier.height(8.dp))
 
                 OutlinedTextField(
                     value = roomNumber,
@@ -449,7 +606,17 @@ fun RoutineDialog(
             TextButton(
                 onClick = {
                     if (subjectName.isNotBlank() && className.isNotBlank() && teacherName.isNotBlank()) {
-                        onSave(subjectName, className, teacherName, selectedDay, startTime, endTime, roomNumber)
+                        var finalStartTime = startTime
+                        var finalEndTime = endTime
+
+                        if (useManualStartTime) {
+                            finalStartTime = formatManualTime(startTime)
+                        }
+                        if (useManualEndTime) {
+                            finalEndTime = formatManualTime(endTime)
+                        }
+
+                        onSave(subjectName, className, teacherName, selectedDay, finalStartTime, finalEndTime, roomNumber)
                     }
                 }
             ) {

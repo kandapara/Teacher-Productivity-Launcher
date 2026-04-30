@@ -20,4 +20,12 @@ interface NoteDao {
 
     @Delete
     suspend fun deleteNote(note: Note)
+
+    // Get all notes (for backup)
+    @Query("SELECT * FROM notes")
+    fun getAllNotesForBackup(): Flow<List<Note>>
+
+    // Delete all notes (for restore)
+    @Query("DELETE FROM notes")
+    suspend fun deleteAllNotes()
 }

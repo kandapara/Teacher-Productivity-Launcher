@@ -37,6 +37,10 @@ class FavoriteAppsViewModel(application: Application) : AndroidViewModel(applica
         }
     }
 
+    fun refreshFavorites() {
+        loadFavorites()
+    }
+
     suspend fun addToFavorites(packageName: String, appName: String): Boolean {
         val currentSize = _favoriteApps.value.size
         if (currentSize >= MAX_FAVORITES) {

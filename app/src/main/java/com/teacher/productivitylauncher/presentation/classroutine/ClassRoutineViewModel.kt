@@ -10,11 +10,12 @@ import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.teacher.productivitylauncher.R
+import com.teacher.productivitylauncher.data.local.SettingsDataStore
 import com.teacher.productivitylauncher.data.local.database.TeacherDatabase
 import com.teacher.productivitylauncher.data.local.entity.ClassRoutine
 import com.teacher.productivitylauncher.data.local.repository.ClassRoutineRepository
 import com.teacher.productivitylauncher.presentation.MainActivity
+import com.teacher.productivitylauncher.presentation.utils.NotificationHelper
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -25,6 +26,8 @@ class ClassRoutineViewModel(application: Application) : AndroidViewModel(applica
     private val repository = ClassRoutineRepository(
         TeacherDatabase.getDatabase(application).classRoutineDao()
     )
+    private val settingsDataStore = SettingsDataStore(application)
+    private var areNotificationsEnabled = true
 
     private val _routines = MutableStateFlow<List<ClassRoutine>>(emptyList())
     val routines: StateFlow<List<ClassRoutine>> = _routines.asStateFlow()
@@ -44,6 +47,15 @@ class ClassRoutineViewModel(application: Application) : AndroidViewModel(applica
     init {
         loadAvailableClasses()
         loadTodayRoutines()
+        loadNotificationPreference()
+    }
+
+    private fun loadNotificationPreference() {
+        viewModelScope.launch {
+            settingsDataStore.areNotificationsEnabled.collect { enabled ->
+                areNotificationsEnabled = enabled
+            }
+        }
     }
 
     private fun loadAvailableClasses() {
@@ -144,47 +156,16 @@ class ClassRoutineViewModel(application: Application) : AndroidViewModel(applica
     }
 
     private fun scheduleClassNotification(routine: ClassRoutine) {
-        if (!routine.notificationEnabled) return
+        if (!routine.notificationEnabled || !areNotificationsEnabled) return
 
         val context = getApplication<Application>()
-
-        // Create notification channel (Android 8+)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                "class_reminder",
-                "Class Reminders",
-                NotificationManager.IMPORTANCE_HIGH
-            ).apply {
-                description = "Reminders for upcoming classes"
-                enableVibration(true)
-            }
-            val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            notificationManager.createNotificationChannel(channel)
-        }
-
-        showTestNotification(routine)
-    }
-
-    private fun showTestNotification(routine: ClassRoutine) {
-        val context = getApplication<Application>()
-        val intent = Intent(context, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-        }
-        val pendingIntent = PendingIntent.getActivity(
-            context, routine.id, intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        val notificationHelper = NotificationHelper(context)
+        notificationHelper.createNotificationChannels()
+        notificationHelper.showClassNotification(
+            routine.subjectName,
+            routine.startTime,
+            routine.roomNumber
         )
-
-        val notification = NotificationCompat.Builder(context, "class_reminder")
-            .setContentTitle("📚 Upcoming Class: ${routine.subjectName}")
-            .setContentText("Time: ${routine.startTime} | Room: ${routine.roomNumber}")
-            .setSmallIcon(android.R.drawable.ic_dialog_info)
-            .setContentIntent(pendingIntent)
-            .setAutoCancel(true)
-            .build()
-
-        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        notificationManager.notify(routine.id, notification)
     }
 
     private fun clearMessageAfterDelay() {
